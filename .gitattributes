@@ -1,0 +1,21 @@
+# Normalise line endings for text; keep working copies native on Windows.
+* text=auto
+
+*.py   text eol=lf
+*.md   text eol=lf
+*.csv  text eol=lf
+*.json text eol=lf
+*.txt  text eol=lf
+
+# Office documents are binary — never diff or auto-convert them.
+*.xlsx binary
+*.docx binary
+
+# Keep GitHub's language stats about the code, not the data viewer or the corpora.
+*.csv                       linguist-detectable=false
+v3/manual_work/postings_reader.html linguist-vendored
+v2/postings_reader.html             linguist-vendored
+
+# Frozen provenance snapshots — collapse them in PR diffs.
+V1/** linguist-generated
+v2/** linguist-generated
