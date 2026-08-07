@@ -31,23 +31,25 @@ def _outer_splits(seed=42):
 
 
 # ---------- S1 ----------
+def _thr_value(thr, cat):
+    # thresholds may be dict (cat->float) or ndarray in CATEGORIES order
+    if isinstance(thr, dict):
+        return thr[cat]
+    else:
+        return thr[CATEGORIES.index(cat)]
+
 def test_supervised_outer_label_isolation():
     gold_df, y, texts, outer_splits, _ = _outer_splits()
     from v4.evaluation.semantic_nested import run_nested_supervised_tfidf
     res1 = run_nested_supervised_tfidf(gold_df, y, texts, outer_splits, seed=42)
-    # flip outer validation labels for fold 0 (should not change model for that fold if we re-run with same y but different val labels? Actually run uses y for fitting; flipping val labels should not affect thresholds/params for that fold because thresholds come from inner train only (which is subset of outer train, not val). So we test by mutating y[val_idx]
     y_mut = y.copy()
-    # flip all labels in outer fold 0 validation
     train_idx, val_idx = outer_splits[0]
     y_mut[val_idx] = 1 - y_mut[val_idx]
     res2 = run_nested_supervised_tfidf(gold_df, y_mut, texts, outer_splits, seed=42)
-    # outer fold 1 and 2 should be identical (their outer_train includes some of fold0 val, but thresholds are per-fold; fold0 thresholds should differ, others should not? Actually flipping val changes y for other folds' train sets (since val of fold0 is part of train for fold1/2). So the strongest test is: thresholds for fold0 should be unchanged when we flip its own val labels, because thresholds are derived from outer_train inner CV only.
-    # Compare outer_fold_info thresholds for fold 0
     thr1 = res1["outer_fold_info"][0]["thresholds"]
     thr2 = res2["outer_fold_info"][0]["thresholds"]
-    # They should be equal (within tolerance) because outer val labels not used
     for cat in CATEGORIES:
-        assert abs(thr1[cat] - thr2[cat]) < 1e-9, f"S1 threshold for {cat} changed when outer val labels flipped"
+        assert abs(_thr_value(thr1, cat) - _thr_value(thr2, cat)) < 1e-9, f"S1 threshold for {cat} changed when outer val labels flipped"
 
 
 def test_supervised_outer_text_isolation():
@@ -62,7 +64,7 @@ def test_supervised_outer_text_isolation():
     thr1 = res1["outer_fold_info"][0]["thresholds"]
     thr2 = res2["outer_fold_info"][0]["thresholds"]
     for cat in CATEGORIES:
-        assert abs(thr1[cat] - thr2[cat]) < 1e-9, "S1 thresholds changed when outer val text mutated"
+        assert abs(_thr_value(thr1, cat) - _thr_value(thr2, cat)) < 1e-9, "S1 thresholds changed when outer val text mutated"
     assert res1["outer_fold_info"][0]["vocab_size"] == res2["outer_fold_info"][0]["vocab_size"]
 
 
@@ -173,7 +175,7 @@ def test_embedding_outer_label_isolation():
     thr1 = res1["outer_fold_info"][0]["thresholds"]
     thr2 = res2["outer_fold_info"][0]["thresholds"]
     for cat in CATEGORIES:
-        assert abs(thr1[cat] - thr2[cat]) < 1e-9
+        assert abs(_thr_value(thr1, cat) - _thr_value(thr2, cat)) < 1e-9
 
 
 def test_embedding_no_lexicon_dependency():
@@ -220,9 +222,6 @@ def test_nli_multilabel_independence():
 def test_nli_outer_label_isolation():
     gold_df, y, texts, outer_splits, _ = _outer_splits()
     from v4.evaluation.semantic_nested import run_nested_nli
-    # Use small subset to speed up (first outer fold only check)
-    # But run full to ensure isolation property holds
-    # For speed, test with 10 postings
     res1 = run_nested_nli(gold_df, y, texts, outer_splits, seed=42)
     y_mut = y.copy()
     _, val_idx = outer_splits[0]
@@ -231,7 +230,7 @@ def test_nli_outer_label_isolation():
     thr1 = res1["outer_fold_info"][0]["thresholds"]
     thr2 = res2["outer_fold_info"][0]["thresholds"]
     for cat in CATEGORIES:
-        assert abs(thr1[cat] - thr2[cat]) < 1e-9
+        assert abs(_thr_value(thr1, cat) - _thr_value(thr2, cat)) < 1e-9
 
 
 def test_nli_no_lexicon_dependency():
