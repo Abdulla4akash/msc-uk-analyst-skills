@@ -95,8 +95,9 @@ Same pattern: whole-word dominates, negatives/thresholds/IDF marginal.
 | **A4→A5** | IDF weighting | 0.942 | **0.934** | **–0.008** | [–0.012,–0.003] | –3 | **+18** |
 
 - A0→A1 is the dominant effect (+11.2 pts macro-F1, FP 382→45).
-- A1→A2 and A4→A5 are negative or neutral (CI includes zero for negatives; IDF CI entirely negative).
+- A1→A2: Δ macro-F1 ≈ –0.0011 (3 wrong→correct, 8 correct→wrong, net –5 corrected cells) — frozen negative-pattern suppression is theoretically motivated for known homonyms (reporting/`reports to`, excel/`excellence`, etl/`product pipeline`, programming/`clinical coding`, cloud/`Sales Cloud`, sql/`Hyperion`), but on the existing development corpus it is approximately **neutral to slightly harmful overall, driven mainly by reporting suppressions that remove genuine positives** (see audit); it is not costless.
 - A2→A4 does nothing — any-hit already at optimal thresholds (all outer thresholds 0.02).
+- A4→A5 is negative (CI entirely negative).
 
 Per-category incremental F1 table is in `lexical_ablation_per_category.csv`.
 
@@ -180,7 +181,7 @@ Current evidence: IDF weighting **hurts** internal performance vs tuned unweight
 | **A2→A4** | 0 | 0 | 3811 | 89 | 0 |
 | **A4→A5** | 3 | 18 | 3793 | 86 | **–15** |
 
-Only A0→A1 genuinely repairs errors; other components are neutral or net-negative.
+Only A0→A1 genuinely repairs errors; A1→A2 is neutral to slightly harmful (net –5), A2→A4 identical, A4→A5 net-negative — negative-pattern suppression is not costless (see correction above).
 
 ## Regression anchors
 
@@ -206,6 +207,6 @@ The approximately 0.94 nested internal-development macro-F1 is **not** produced 
 
 ## Next research implication
 
-Both A2 (whole-word + negatives, any-hit) and A4 (A2 + nested thresholds, A4=A2 here) are the honest, minimal lexical baselines to carry into the future semantic-model comparison. Because A4/A2 are identical and A5 (IDF) slightly hurts, the **primary lexical candidate for the semantic comparison should be the unweighted (A2/A4) baseline**, with the weighted variant retained as a secondary for completeness — as already decided (`selection_status: undecided`, `candidate_baselines`).
+For future comparisons retain **BOTH** — **LEXICAL-A (A1):** whole-word, final frozen lexicon, no negative suppression, fixed any-hit (≈0.9429) and **LEXICAL-B (A2/A4):** whole-word, frozen negative suppression, effectively equivalent to A4 here because nested thresholding changed zero predictions (≈0.9418) — also retain **A5 (IDF-weighted, ≈0.9342)** as the historical weighted lexical reference where useful, but do not treat it as the primary lexical method. Frozen negative-pattern suppression is theoretically motivated for known homonyms, but on the existing development corpus it is approximately neutral to slightly harmful overall, driven mainly by reporting suppressions that remove genuine positives — it is not costless. Do not retune the negative patterns. Previously stated next-step wording is superseded by this correction.
 
 Do not begin semantic models until GPT-5.6 Pro reviews this ablation.
