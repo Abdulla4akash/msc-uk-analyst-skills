@@ -223,7 +223,7 @@ def main():
             "external_locked_test": "RESERVED for future independently collected dataset — does not exist yet; do not fabricate",
             "fit_scope": "TfidfVectorizer fitted on internal_tuning / outer_train texts only; validation/holdout texts only transformed",
             "threshold_scope": "tuned on internal_tuning (holdout) or inner validation folds only (nested CV); outer validation labels never used for thresholds",
-            "model_selection": "best variant chosen by internal_tuning macro-F1 only (never internal_holdout, never external_locked_test)",
+            "model_selection": "weighted and unweighted lexical baselines retained as candidate baselines; no automatic winner selected from the existing development corpus",
             "scoring": "batch-invariant: no max-normalisation; cosine is raw, weighted lexical is sum(IDF matched)/sum(IDF lexicon)",
         },
         "modes_run": mode,
