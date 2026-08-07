@@ -235,7 +235,7 @@ def test_nli_cache_provenance():
     assert scores.shape == (len(texts), len(CATEGORIES))
     assert prov["model_id"] == S3_MODEL_ID
     assert prov["texts_hash"] == _provenance_hash(texts, S3_MODEL_ID, NLI_HYPOTHESES_LIST, S3_CHUNK_TOKENS)
-    cache_path = pathlib.Path("/Users/akashx/msc-uk-analyst-skills/v4/results/semantic/s3_nli_scores_cache.npz")
+    cache_path = pathlib.Path(__file__).resolve().parents[2] / "v4/results/semantic/s3_nli_scores_cache.npz"
     if cache_path.exists():
         data = np.load(cache_path)
         assert data["scores"].shape == (len(texts), len(CATEGORIES))
@@ -250,6 +250,6 @@ def test_hybrid_no_lexicon_import_in_S3():
     """Hybrid S3 path must not import lexicon via NLI scorer source."""
     import pathlib
 
-    nli_src = pathlib.Path("/Users/akashx/msc-uk-analyst-skills/v4/semantic/zero_shot_nli.py").read_text()
+    nli_src = (pathlib.Path(__file__).resolve().parents[2] / "v4/semantic/zero_shot_nli.py").read_text()
     # forbid lexicon string in NLI source (case-insensitive)
     assert "LEXICON" not in nli_src.upper() or "no lexicon" in nli_src.lower(), "NLI source must not depend on lexicon"

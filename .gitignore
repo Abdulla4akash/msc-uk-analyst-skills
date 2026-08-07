@@ -16,3 +16,16 @@ results/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# External raw data — copyrighted third-party advert text, do not commit
+v4/external/raw/
+v4/external/candidates*.csv
+v4/external/candidates*.json
+v4/external/annotation/*.xlsx
+v4/external/annotation/*.csv
+# v4/external/LOCKED_SAMPLE_MANIFEST.csv  # commit only if safe (no raw text); keep gitignored raw is separate
+# v4/EXTERNAL_LABEL_LOCK.json  # safe to commit (hashes only)
+v4/external/external_raw/
+*_raw.json
+# Freeze manifest is committed (contains hashes, not text) — keep
+# v4/EXTERNAL_FREEZE_MANIFEST.json

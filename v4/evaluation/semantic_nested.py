@@ -5,6 +5,9 @@ where possible, but keep lexical nested.py untouched (existing tests rely on it)
 Each helper enforces: outer validation never influences fitting/thresholds/model selection.
 """
 
+import hashlib
+import json
+from pathlib import Path
 import numpy as np
 from sklearn.model_selection import StratifiedKFold
 
@@ -18,6 +21,56 @@ from v4.semantic.supervised_tfidf import (
 )
 from v4.semantic.embedding_similarity import embedding_scores, get_category_embeddings
 from v4.semantic.zero_shot_nli import nli_scores_for_texts
+
+# Cache helpers for NLI (reuse proven cache from hybrid, environment/model-cache problem fix)
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if not (REPO_ROOT / "v4" / "config.py").exists():
+    REPO_ROOT = Path.cwd() / "msc-uk-analyst-skills"
+    if not (REPO_ROOT / "v4" / "config.py").exists():
+        REPO_ROOT = Path.cwd()
+
+def _provenance_hash(texts, model_id, hypotheses, chunk_tokens):
+    h = hashlib.sha256()
+    h.update(model_id.encode())
+    for hyp in hypotheses:
+        h.update(hyp.encode())
+    h.update(str(chunk_tokens).encode())
+    for t in texts:
+        h.update(t.encode("utf-8"))
+        h.update(b"\x00")
+    return h.hexdigest()[:16]
+
+def _get_nli_scores_cached(texts):
+    from v4.semantic.model_config import S3_MODEL_ID, S3_CHUNK_TOKENS, NLI_HYPOTHESES_LIST
+    from v4.semantic.zero_shot_nli import nli_scores_for_texts
+    cache_dir = REPO_ROOT / "v4" / "results" / "semantic"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_path = cache_dir / "s3_nli_scores_cache.npz"
+    provenance_path = cache_dir / "s3_nli_scores_provenance.json"
+    cur_hash = _provenance_hash(texts, S3_MODEL_ID, NLI_HYPOTHESES_LIST, S3_CHUNK_TOKENS)
+    provenance = {
+        "model_id": S3_MODEL_ID,
+        "chunk_tokens": S3_CHUNK_TOKENS,
+        "n_texts": len(texts),
+        "texts_hash": cur_hash,
+        "hypotheses": NLI_HYPOTHESES_LIST,
+    }
+    if cache_path.exists() and provenance_path.exists():
+        try:
+            prov = json.load(open(provenance_path))
+            if prov.get("texts_hash") == cur_hash and prov.get("model_id") == S3_MODEL_ID:
+                data = np.load(cache_path)
+                scores = data["scores"]
+                if scores.shape == (len(texts), len(__import__("v4.config", fromlist=["CATEGORIES"]).CATEGORIES)):
+                    return scores, provenance, True
+        except Exception:
+            pass
+    scores = nli_scores_for_texts(texts)
+    np.savez_compressed(cache_path, scores=scores)
+    json.dump(provenance, open(provenance_path, "w"), indent=2)
+    return scores, provenance, False
+
+
 
 
 def _make_inner_splits(y_outer_train, outer_train_idx, seed):
@@ -158,8 +211,8 @@ def run_nested_nli(gold_df, y, texts, outer_splits, seed=42):
     outer_pred = np.zeros((n, len(CATEGORIES)), dtype=int)
     outer_scores = np.zeros((n, len(CATEGORIES)), dtype=float)
     outer_info = []
-    # Precompute all NLI scores (frozen, no label influence)
-    all_scores = nli_scores_for_texts(texts)
+    # Precompute all NLI scores (frozen, no label influence) — use cache to avoid 650s recomputation
+    all_scores, _, _ = _get_nli_scores_cached(texts)
     for outer_idx, (train_idx, val_idx) in enumerate(outer_splits):
         roles_outer = gold_df.iloc[train_idx]["role_family"].values
         try:
