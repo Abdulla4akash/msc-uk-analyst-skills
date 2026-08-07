@@ -1691,8 +1691,8 @@
   "pytorch_version": "2.8.0",
   "random_seed": 42,
   "sentence_transformers_version": "5.1.2",
-  "source_git_commit": "60902cf34f6c75c1d9640cbb198bd668bd948426",
+  "source_git_commit": "98bb5ea247fa182de28d99302e0258f031d0e805",
   "taxonomy_version": "v3-13cat-frozen",
-  "timestamp_utc": "2026-08-07T15:58:16.130510+00:00",
+  "timestamp_utc": "2026-08-07T15:58:42.963198+00:00",
   "transformers_version": "4.57.6"
 }
