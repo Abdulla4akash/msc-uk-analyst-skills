@@ -1,0 +1,79 @@
+{
+  "LABELS_CREATED": false,
+  "LABELS_LOCKED": false,
+  "METHODS_FROZEN": true,
+  "MODELS_EVALUATED": false,
+  "SAMPLE_LOCKED": true,
+  "dedup_dev": {
+    "exact_overlaps": 0,
+    "near_pairs": 0,
+    "normalised_overlaps": 0
+  },
+  "dedup_pool": {
+    "n_near_pairs": 1628,
+    "n_unique_exact": 531
+  },
+  "e1_meta": {
+    "challenge_or_natural": "natural (E1), primary external generalisation set",
+    "pool_distribution": {
+      "analytics engineer": 1,
+      "business analyst": 110,
+      "data analyst": 46,
+      "data scientist": 8,
+      "finance analyst": 98,
+      "marketing analyst": 3,
+      "other": 31,
+      "other_analyst": 234
+    },
+    "role_distribution_selected": {
+      "analytics engineer": 1,
+      "business analyst": 41,
+      "data analyst": 18,
+      "data scientist": 4,
+      "finance analyst": 36,
+      "marketing analyst": 2,
+      "other": 12,
+      "other_analyst": 86
+    },
+    "role_family_quotas": {
+      "analytics engineer": 1,
+      "business analyst": 41,
+      "data analyst": 18,
+      "data scientist": 4,
+      "finance analyst": 36,
+      "marketing analyst": 2,
+      "other": 12,
+      "other_analyst": 86
+    },
+    "sampling_frame_size": 531,
+    "sampling_seed": 42,
+    "selected_n": 200,
+    "selection_rule": "deterministic stratified sampling on role_family, no model scores, seed 42"
+  },
+  "e2_meta": {
+    "c1_definition": "low A1 coverage <0.15 or A1 negative while >=2 semantics positive",
+    "c2_definition": "frozen ambiguity text rules: excellent/Excel, reports to, pipeline, clinical coding/programme, Sales/Service Cloud, Oracle/Hyperion",
+    "c3_definition": "underrepresented role families or low lexical coverage or novel companies",
+    "challenge_or_natural": "challenge (E2), post-hoc stress test, not natural population",
+    "quotas_target": {
+      "C1_lexical_low_coverage_semantic_disagreement": 40,
+      "C2_lexical_ambiguity_homonym": 30,
+      "C3_role_terminology_edge": 30
+    },
+    "sampling_seed": 42,
+    "selected_counts": {
+      "C1_lexical_low_coverage_semantic_disagreement": 40,
+      "C2_lexical_ambiguity_homonym": 30,
+      "C3_role_terminology_edge": 30
+    },
+    "selection_rule": "challenge set uses frozen model outputs to identify difficult unlabelled cases, explicitly post-hoc, reported separately, not mixed with E1",
+    "total_selected": 100
+  },
+  "locked_sample_manifest_sha256": "884c521383b1581df75241843b10e98d4c1954539820543592b8e90734034bf3",
+  "manifest_path": "v4/external/LOCKED_SAMPLE_MANIFEST.csv",
+  "n_E1": 200,
+  "n_E2": 100,
+  "n_total": 300,
+  "private_manifest_path": "v4/external/private/LOCKED_SAMPLE_MANIFEST_PRIVATE.csv",
+  "timestamp_utc": "2026-08-07T18:10:38.469301+00:00"
+}

@@ -29,3 +29,8 @@ v4/external/external_raw/
 *_raw.json
 # Freeze manifest is committed (contains hashes, not text) — keep
 # v4/EXTERNAL_FREEZE_MANIFEST.json
+.env
+.env.*
+v4/external/private/
+v4/external/*_private.csv
+v4/external/annotation/private/

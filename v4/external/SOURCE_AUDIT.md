@@ -10,7 +10,9 @@
 ## Candidate Sources Considered
 
 ### 1. Reed API (reed.co.uk) — **SELECTED (pending API key)**
-- **Access mechanism:** Official Reed API (https://www.reed.co.uk/developers) with API key, paginated `POST /search` with `keywords=analyst`, `locationName=UK`
+- **Access mechanism:** Official Reed Jobseeker API (https://www.reed.co.uk/developers) — `GET https://www.reed.co.uk/api/1.0/search` with HTTP Basic Auth (API key as username, blank password), paginated with `keywords`, `locationName`, `resultsToTake`, `resultsToSkip`
+- **Details endpoint:** `GET https://www.reed.co.uk/api/1.0/jobs/{jobId}` for complete job description
+- **Authentication:** HTTP Basic Auth, `auth=(api_key, "")` (Jobseeker API, not Recruiter API)
 - **Date checked:** 2026-08-07
 - **Fields available:** `jobId`, `jobTitle`, `locationName`, `date` (posting date), `jobDescription` (full HTML/text), `employerName`, `jobUrl`, `expirationDate`, `minimumSalary`/`maximumSalary`
 - **Timestamp availability:** Yes (`date`)
