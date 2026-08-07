@@ -143,16 +143,20 @@ def run_internal_holdout(gold_df, y, texts, outdir, seed=RANDOM_SEED):
         "fitted_on": "internal_tuning texts only",
     }
 
-    # Model selection on internal_tuning only (macro-F1) — NOT internal_holdout, NOT external_locked_test
+    # Internal comparison: weighted and unweighted are the candidates of interest.
+    # Do NOT auto-declare a winner on a 0.001 difference (Fix 3).
     internal_tuning_scores = {}
     for name, r in results.items():
         rep = evaluate(y[is_internal_tuning], r["pred"][is_internal_tuning])
         macro = float(rep.loc[rep.category == "MACRO AVG", "f1"].iloc[0])
         internal_tuning_scores[name] = macro
-    best = max(internal_tuning_scores, key=lambda k: internal_tuning_scores[k])
+    # Retain both lexical baselines as serious candidates; no automatic winner.
+    selection_status = "undecided"
+    comparison_note = "weighted and unweighted lexical baselines are effectively tied under current internal development evaluation"
+    candidate_baselines = ["unweighted_lexical", "weighted_lexical_tfidf"]
 
     elapsed = time.time() - t_start
-    return results, split, internal_tuning_scores, best, elapsed
+    return results, split, internal_tuning_scores, selection_status, comparison_note, candidate_baselines, elapsed
 
 
 def run_nested_cv(gold_df, y, texts, outdir, seed=RANDOM_SEED, n_outer_splits=3, grid=None):
@@ -180,26 +184,10 @@ def main():
     ap.add_argument("--outdir", default=str(REPO_ROOT / "v4/results"))
     ap.add_argument("--mode", choices=["internal_holdout", "nested_cv", "both"], default="both",
                     help="internal_holdout: single stratified split; nested_cv: nested 3-fold CV; both: run both")
-    # Back-compat aliases
-    for alias in ["holdout", "cv"]:
-        pass
     ap.add_argument("--seed", type=int, default=RANDOM_SEED)
     ap.add_argument("--n_outer_splits", type=int, default=3, help="outer folds (3 is max feasible for role_family)")
     ap.add_argument("--n_bootstrap", type=int, default=10000)
-    # Back-compat: accept deprecated --mode holdout/cv and --n_splits
-    args, unknown = ap.parse_known_args()
-    # Handle deprecated aliases
-    if args.mode == "holdout":
-        args.mode = "internal_holdout"
-    if args.mode == "cv":
-        args.mode = "nested_cv"
-    # Parse again for deprecated --n_splits
-    import argparse as _ap
-    parser2 = _ap.ArgumentParser()
-    parser2.add_argument("--n_splits", type=int, default=None)
-    ns, _ = parser2.parse_known_args()
-    if ns.n_splits is not None:
-        args.n_outer_splits = ns.n_splits
+    args = ap.parse_args()
 
     mode = args.mode
     outdir = Path(args.outdir)
@@ -245,15 +233,18 @@ def main():
                         f"300 postings treated as DEVELOPMENT material; external_locked_test does not exist yet"]
 
     if mode in ("internal_holdout", "both"):
-        results, split, internal_tuning_scores, best, elapsed = run_internal_holdout(gold_df, y, texts, outdir, seed=args.seed)
+        results, split, internal_tuning_scores, selection_status, comparison_note, candidate_baselines, elapsed = run_internal_holdout(
+            gold_df, y, texts, outdir, seed=args.seed
+        )
         is_internal_tuning = split["is_internal_tuning"]
         is_internal_holdout = split["is_internal_holdout"]
 
+        # Bootstrap both lexical methods (Fix 3) — not just a single "best"
         bootstrap_results = {}
         for name, r in results.items():
-            y_holdout = y[is_internal_holdout]
-            p_holdout = r["pred"][is_internal_holdout]
-            if name == best:
+            if name in ("unweighted_lexical", "weighted_lexical_tfidf"):
+                y_holdout = y[is_internal_holdout]
+                p_holdout = r["pred"][is_internal_holdout]
                 bootstrap_results[name] = bootstrap_all(y_holdout, p_holdout, n_bootstrap=args.n_bootstrap, seed=args.seed)
 
         holdout_detail = {}
@@ -263,16 +254,10 @@ def main():
             acc_tuning = accounting_report(y[is_internal_tuning], r["pred"][is_internal_tuning])
             acc_holdout = accounting_report(y[is_internal_holdout], r["pred"][is_internal_holdout])
 
-            # Publication-safe filenames: internal_tuning / internal_holdout (keep backward-compat dev/test aliases)
             rep_tuning.to_csv(outdir / f"v4_{name}_internal_tuning.csv", index=False)
             rep_holdout.to_csv(outdir / f"v4_{name}_internal_holdout.csv", index=False)
-            # Also write aliases for back-compat
-            rep_tuning.to_csv(outdir / f"v4_{name}_dev.csv", index=False)
-            rep_holdout.to_csv(outdir / f"v4_{name}_test.csv", index=False)
             (outdir / f"v4_{name}_accounting_internal_tuning.json").write_text(json.dumps(acc_tuning, indent=2))
             (outdir / f"v4_{name}_accounting_internal_holdout.json").write_text(json.dumps(acc_holdout, indent=2))
-            (outdir / f"v4_{name}_accounting_dev.json").write_text(json.dumps(acc_tuning, indent=2))
-            (outdir / f"v4_{name}_accounting_test.json").write_text(json.dumps(acc_holdout, indent=2))
 
             holdout_detail[name] = {
                 "thresholds": {c: float(r["thresholds"][i]) for i, c in enumerate(CATEGORIES)},
@@ -286,15 +271,10 @@ def main():
                 "internal_holdout_micro_f1": float(rep_holdout.loc[rep_holdout.category == "MICRO AVG", "f1"].iloc[0]),
                 "internal_holdout_subset_accuracy": float(rep_holdout.loc[rep_holdout.category == "SUBSET ACCURACY", "f1"].iloc[0]),
                 "internal_holdout_hamming_accuracy": float(rep_holdout.loc[rep_holdout.category == "HAMMING ACCURACY", "f1"].iloc[0]),
-                # Back-compat keys
-                "dev_macro_f1": float(rep_tuning.loc[rep_tuning.category == "MACRO AVG", "f1"].iloc[0]),
-                "test_macro_f1": float(rep_holdout.loc[rep_holdout.category == "MACRO AVG", "f1"].iloc[0]),
                 "internal_tuning_accounting": acc_tuning,
                 "internal_holdout_accounting": acc_holdout,
             }
             if name in bootstrap_results:
-                holdout_detail[name]["bootstrap"] = bootstrap_results[name]
-                # Also expose with publication-safe names
                 holdout_detail[name]["internal_holdout_bootstrap"] = bootstrap_results[name]
 
             full_text_report.append(format_report(rep_tuning, f"v4 {name} — internal_tuning (n={is_internal_tuning.sum()})"))
@@ -309,27 +289,24 @@ def main():
                 "n_internal_holdout": int(is_internal_holdout.sum()),
                 "internal_tuning_ids": split["internal_tuning_ids"],
                 "internal_holdout_ids": split["internal_holdout_ids"],
-                # Back-compat
-                "n_dev": int(is_internal_tuning.sum()),
-                "n_test": int(is_internal_holdout.sum()),
-                "dev_ids": split["internal_tuning_ids"],
-                "test_ids": split["internal_holdout_ids"],
                 "role_family_internal_tuning": gold_df[is_internal_tuning]["role_family"].value_counts().to_dict(),
                 "role_family_internal_holdout": gold_df[is_internal_holdout]["role_family"].value_counts().to_dict(),
             },
             "model_selection": {
-                "criterion": "internal_tuning macro-F1",
+                "selection_status": selection_status,
+                "comparison": comparison_note,
+                "candidate_baselines": candidate_baselines,
                 "internal_tuning_macro_f1_by_variant": internal_tuning_scores,
-                "best_variant": best,
-                "note": "selection uses internal_tuning only; internal_holdout metrics reported after freezing; external_locked_test does not exist",
+                "note": "no automatic winner — retain both lexical baselines; external_locked_test does not exist",
             },
             "runtime_sec": float(elapsed),
             "results": holdout_detail,
         }
         summary["internal_holdout"] = holdout_block
-        # Back-compat key
-        summary["holdout"] = holdout_block
-        full_text_report.append(f"\nInternal holdout model selection (internal_tuning macro-F1): {internal_tuning_scores}  -> best={best} (see Fix 2: weighted and unweighted are effectively tied)")
+        full_text_report.append(
+            f"\nInternal holdout comparison (internal_tuning macro-F1): {internal_tuning_scores}  "
+            f"[{comparison_note}; selection_status={selection_status}]"
+        )
         full_text_report.append(f"Holdout runtime {elapsed:.1f}s  (vectoriser fitted on internal_tuning only; no batch-max normalisation)")
 
         for name, r in results.items():
@@ -355,10 +332,7 @@ def main():
             acc = accounting_report(y, nested_pred)
             # Exclude outer_fold_info thresholds arrays from CSV; write report
             rep.to_csv(outdir / f"v4_{method}_nested_cv_report.csv", index=False)
-            # Back-compat alias
-            rep.to_csv(outdir / f"v4_{method}_cv_oof_report.csv", index=False)
             (outdir / f"v4_{method}_nested_cv_accounting.json").write_text(json.dumps(acc, indent=2))
-            (outdir / f"v4_{method}_cv_oof_accounting.json").write_text(json.dumps(acc, indent=2))
 
             # Bootstrap over nested predictions is supplementary — does NOT capture training variance
             boot = bootstrap_all(y, nested_pred, n_bootstrap=args.n_bootstrap, seed=args.seed)
@@ -368,13 +342,8 @@ def main():
                 "nested_micro_f1": float(rep.loc[rep.category == "MICRO AVG", "f1"].iloc[0]),
                 "nested_subset_accuracy": float(rep.loc[rep.category == "SUBSET ACCURACY", "f1"].iloc[0]),
                 "nested_hamming_accuracy": float(rep.loc[rep.category == "HAMMING ACCURACY", "f1"].iloc[0]),
-                # Back-compat keys
-                "oof_macro_f1": float(rep.loc[rep.category == "MACRO AVG", "f1"].iloc[0]),
-                "oof_micro_f1": float(rep.loc[rep.category == "MICRO AVG", "f1"].iloc[0]),
                 "nested_bootstrap": boot,
-                "oof_bootstrap": boot,
                 "nested_accounting": acc,
-                "oof_accounting": acc,
                 "per_report": rep.to_dict(orient="records"),
                 "outer_fold_info": outer_fold_info,
                 "note_bootstrap": "posting-level bootstrap over fixed nested-CV predictions quantifies uncertainty conditional on those predictions but does NOT fully reproduce model-training uncertainty; report fold-to-fold variation as primary",
@@ -399,7 +368,6 @@ def main():
         per_fold_df = pd.DataFrame(per_fold_rows)
         if not per_fold_df.empty:
             per_fold_df.to_csv(outdir / "v4_nested_cv_per_fold_macro_f1.csv", index=False)
-            per_fold_df.to_csv(outdir / "v4_cv_per_fold_macro_f1.csv", index=False)
 
         summary["nested_cv"] = {
             "method": f"nested CV: outer Stratified GroupKFold (k={args.n_outer_splits}) + inner StratifiedKFold (k=2) per outer_train, using ONLY outer_train for fitting/thresholds",
@@ -414,15 +382,12 @@ def main():
             "grid": {"start": float(grid[0]), "stop": float(grid[-1]), "n_points": int(len(grid))},
             "interpretation": "Each outer validation fold uses thresholds and TF-IDF fitted ONLY on its outer_train (via inner CV), so outer labels never influence their own thresholds.",
         }
-        # Back-compat key
-        summary["cv"] = summary["nested_cv"]
         full_text_report.append(f"\nNested CV runtime {elapsed:.1f}s  (each outer fold: fit on outer_train only; thresholds from inner CV only; {', '.join(outer_meta['limitations'][:2])})")
 
         for method, res in nested_by_method.items():
             dfp = pd.DataFrame(res["nested_predictions"], columns=CATEGORIES)
             dfp.insert(0, "posting_id", gold_df["posting_id"].values)
             dfp.to_csv(outdir / f"v4_{method}_nested_cv_predictions.csv", index=False)
-            dfp.to_csv(outdir / f"v4_{method}_cv_oof_predictions.csv", index=False)
 
     # Final summary
     summary["runtime_sec_total"] = None

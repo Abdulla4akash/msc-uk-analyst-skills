@@ -129,15 +129,15 @@ def run_nested_cv_for_method(
     nested_pred = np.zeros((n, n_cats), dtype=int)
     nested_scores = np.zeros((n, n_cats), dtype=float)
     outer_fold_info = []
-    visited = np.zeros(n, dtype=bool)
+    prediction_count = np.zeros(n, dtype=int)
 
     for outer_fold_idx, (outer_train_idx, outer_val_idx) in enumerate(outer_splits):
         outer_train_idx = np.array(outer_train_idx, dtype=int)
         outer_val_idx = np.array(outer_val_idx, dtype=int)
         # Structural isolation: never touch y[outer_val_idx] or texts[outer_val_idx] for fitting/tuning
+        # Outer validation labels/texts are only used after this function returns, in the evaluation stage.
         outer_train_gold = gold_df.iloc[outer_train_idx].reset_index(drop=True)
         y_outer_train = y[outer_train_idx]
-        y_outer_val = y[outer_val_idx]  # only used at final evaluation time
         texts_outer_train = [texts[i] for i in outer_train_idx]
         texts_outer_val = [texts[i] for i in outer_val_idx]
 
@@ -187,7 +187,7 @@ def run_nested_cv_for_method(
         # Store — each outer_val posting gets exactly one prediction
         nested_pred[outer_val_idx] = pred_outer_val
         nested_scores[outer_val_idx] = scores_outer_val
-        visited[outer_val_idx] = True
+        prediction_count[outer_val_idx] += 1
 
         # Provenance for this outer fold
         outer_fold_info.append({
@@ -209,9 +209,12 @@ def run_nested_cv_for_method(
             "grid": {"start": float(grid[0]), "stop": float(grid[-1]), "n_points": int(len(grid))},
         })
 
-    # Accounting check: every posting exactly once
-    assert np.all(visited), "Not every posting was covered as outer validation exactly once — nested CV accounting failed"
-    # Also check no overlap (visited ensures, but check that sets partition)
+    # Accounting check: every posting exactly once, no duplicates
+    assert np.all(prediction_count == 1), (
+        f"Nested CV accounting failed: prediction_count per posting must be 1, "
+        f"got min {prediction_count.min()} max {prediction_count.max()} "
+        f"missing {(prediction_count == 0).sum()} duplicated {(prediction_count > 1).sum()}"
+    )
     return {
         "nested_predictions": nested_pred,
         "nested_scores": nested_scores,

@@ -1,8 +1,9 @@
 # v4 Evaluation Audit — v3 vs Corrected Protocol
 
 **Date:** 2026-08-07  
-**Commit (v4):** `d7ee030bcd41348d85a6b783233c178c4dc0b6d8` (+ v4 changes)  
-**Tag (v3 baseline):** `v3-original-baseline`  
+**v3 frozen baseline tag:** `v3-original-baseline` (`d7ee030`)  
+**v4 methodological implementation reviewed at:** `4207363`  
+**v4 cleanup provenance:** see current `git HEAD` (this document’s content is part of the cleanup commit; the SHA is reported in the final handoff)  
 **Taxonomy:** `v3-13cat-frozen`  
 **Seed:** 42 · **Bootstrap:** 10,000 posting-level resamples, percentile, seed 42
 

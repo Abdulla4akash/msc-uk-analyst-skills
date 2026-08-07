@@ -136,9 +136,6 @@ def make_dev_test_split(gold_df, dev_frac=1 / 3, seed=RANDOM_SEED):
 
     Mirrors v3/evaluate.py:make_split but returns explicit masks and ids
     with publication-safe terminology.
-
-    Returns dict with is_internal_tuning, is_internal_holdout, etc.
-    Kept backward-compatible: also returns is_dev/is_test aliases.
     """
     rng = np.random.default_rng(seed)
     is_internal_tuning = np.zeros(len(gold_df), dtype=bool)
@@ -151,20 +148,13 @@ def make_dev_test_split(gold_df, dev_frac=1 / 3, seed=RANDOM_SEED):
     return {
         "is_internal_tuning": is_internal_tuning,
         "is_internal_holdout": is_internal_holdout,
-        # Aliases for backward compatibility (do not use in new code)
-        "is_dev": is_internal_tuning,
-        "is_test": is_internal_holdout,
         "internal_tuning_ids": gold_df.loc[is_internal_tuning, "posting_id"].tolist(),
         "internal_holdout_ids": gold_df.loc[is_internal_holdout, "posting_id"].tolist(),
-        "dev_ids": gold_df.loc[is_internal_tuning, "posting_id"].tolist(),
-        "test_ids": gold_df.loc[is_internal_holdout, "posting_id"].tolist(),
         "seed": seed,
         "dev_frac": dev_frac,
         "stratify_on": "role_family",
         "n_internal_tuning": int(is_internal_tuning.sum()),
         "n_internal_holdout": int(is_internal_holdout.sum()),
-        "n_dev": int(is_internal_tuning.sum()),
-        "n_test": int(is_internal_holdout.sum()),
     }
 
 
@@ -174,6 +164,12 @@ def make_internal_holdout_split(*args, **kwargs):
 
 
 def make_cv_splits(gold_df, texts=None, n_splits=5, n_repeats=1, seed=RANDOM_SEED):
+    if n_repeats != 1:
+        raise ValueError(
+            "Nested prediction aggregation currently supports one outer-CV repetition only "
+            "(n_repeats must be 1). Repeated nested CV would require aggregating multiple "
+            "predictions per posting; not implemented."
+        )
     """
     Build CV folds over the *development* portion (or over all 300 if caller
     treats 300 as dev).  Each split is (train_idx, val_idx) with grouping.

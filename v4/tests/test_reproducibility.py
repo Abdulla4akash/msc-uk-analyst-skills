@@ -22,15 +22,11 @@ from v4.methods.lexical_baseline import (
     weighted_lexical_scores_with_vec,
 )
 
-
-REPO = "/Users/akashx/msc-uk-analyst-skills"
+from v4.tests._paths import GOLD_PATH, CORPUS_PATH, REPO_ROOT
 
 
 def load_all():
-    gold_df, y, texts = load_gold_with_texts(
-        f"{REPO}/v3/manual_work/gold_standard_annotation_workbook_v2.xlsx",
-        f"{REPO}/v3/manual_work/uk_analyst_corpus_v4_clean.csv",
-    )
+    gold_df, y, texts = load_gold_with_texts(str(GOLD_PATH), str(CORPUS_PATH))
     return gold_df, y, texts
 
 
@@ -40,31 +36,28 @@ def test_split_reproducibility_same_seed():
     gold_df, y, texts = load_all()
     s1 = make_dev_test_split(gold_df, seed=42)
     s2 = make_dev_test_split(gold_df, seed=42)
-    np.testing.assert_array_equal(s1["is_dev"], s2["is_dev"])
-    assert s1["dev_ids"] == s2["dev_ids"]
-    assert s1["test_ids"] == s2["test_ids"]
+    np.testing.assert_array_equal(s1["is_internal_tuning"], s2["is_internal_tuning"])
+    assert s1["internal_tuning_ids"] == s2["internal_tuning_ids"]
+    assert s1["internal_holdout_ids"] == s2["internal_holdout_ids"]
 
 
 def test_split_varies_with_different_seed():
     gold_df, y, texts = load_all()
     s1 = make_dev_test_split(gold_df, seed=42)
     s2 = make_dev_test_split(gold_df, seed=99)
-    # With different seeds, splits should differ (not guaranteed but highly likely for 300)
-    assert not np.array_equal(s1["is_dev"], s2["is_dev"])
+    assert not np.array_equal(s1["is_internal_tuning"], s2["is_internal_tuning"])
 
 
 def test_predictions_reproducible_same_seed_and_config():
     gold_df, y, texts = load_all()
     split = make_dev_test_split(gold_df, seed=42)
-    is_dev = split["is_dev"]
-    dev_texts = [texts[i] for i in np.where(is_dev)[0]]
-    # Fit twice with same train data -> same scores -> same predictions
-    vec1 = fit_tfidf_vectoriser(dev_texts)
+    is_tuning = split["is_internal_tuning"]
+    tuning_texts = [texts[i] for i in np.where(is_tuning)[0]]
+    vec1 = fit_tfidf_vectoriser(tuning_texts)
     s1 = weighted_lexical_scores_with_vec(vec1, texts)
-    vec2 = fit_tfidf_vectoriser(dev_texts)
+    vec2 = fit_tfidf_vectoriser(tuning_texts)
     s2 = weighted_lexical_scores_with_vec(vec2, texts)
     np.testing.assert_allclose(s1, s2, atol=1e-12)
-    # Unweighted is deterministic
     u1 = unweighted_lexical_scores(texts)
     u2 = unweighted_lexical_scores(texts)
     np.testing.assert_allclose(u1, u2, atol=1e-12)
@@ -97,22 +90,17 @@ def test_prediction_shape_and_column_order():
     gold_df, y, texts = load_all()
     preds = unweighted_lexical_scores(texts)  # (n,13)
     assert preds.shape == (len(gold_df), 13)
-    # When wrapped as DataFrame, columns must follow CATEGORIES
     df = pd.DataFrame(preds, columns=CATEGORIES)
     assert df.columns.tolist() == CATEGORIES
-    # Gold label matrix columns also follow CATEGORIES
     assert gold_df[CATEGORIES].columns.tolist() == CATEGORIES
 
 
 def test_v4_results_columns_follow_taxonomy():
-    # Check any existing v4 result files respect order
-    outdir = Path(f"{REPO}/v4/results")
+    outdir = REPO_ROOT / "v4" / "results"
     if not outdir.exists():
         pytest.skip("no v4 results yet")
-    # Look for any v4_*_predictions_gold.csv
-    for f in outdir.glob("v4_*_predictions_gold.csv"):
+    for f in outdir.glob("v4_*_predictions_gold*.csv"):
         df = pd.read_csv(f, nrows=2)
-        # Must contain posting_id, split, then CATEGORIES in order
         assert "posting_id" in df.columns
         cat_cols = [c for c in df.columns if c in CATEGORIES]
         assert cat_cols == CATEGORIES, f"{f.name} category columns out of order: {cat_cols}"
@@ -123,33 +111,23 @@ def test_v4_results_columns_follow_taxonomy():
 def test_no_duplicate_ids_across_splits():
     gold_df, y, texts = load_all()
     split = make_dev_test_split(gold_df, seed=42)
-    # Publication-safe names
     assert "is_internal_tuning" in split and "is_internal_holdout" in split
     tuning_ids = set(split["internal_tuning_ids"])
     holdout_ids = set(split["internal_holdout_ids"])
-    # Back-compat aliases still present
-    assert set(split["dev_ids"]) == tuning_ids
-    assert set(split["test_ids"]) == holdout_ids
     assert len(tuning_ids & holdout_ids) == 0, "internal_tuning and internal_holdout share posting_ids"
     assert len(tuning_ids) + len(holdout_ids) == len(gold_df)
     combined = tuning_ids | holdout_ids
     assert combined == set(gold_df["posting_id"].astype(str).tolist())
-    # external_locked_test must not appear in v4 split output (reserved)
-    assert "external_locked_test" not in str(split).lower() or "reserved" in str(split).lower() or True
 
 
 def test_external_locked_test_is_reserved():
-    # The term external_locked_test must be documented but no dataset fabricated
-    import pathlib
-    summary_path = Path(f"{REPO}/v4/results/v4_lexical_summary.json")
+    summary_path = REPO_ROOT / "v4" / "results" / "v4_lexical_summary.json"
     if not summary_path.exists():
         pytest.skip("summary not yet generated")
     summary = json.loads(summary_path.read_text())
     assert "external_locked_test" in str(summary.get("data_flow", {}))
-    # No external test predictions exist
-    assert not list(Path(f"{REPO}/v4/results").glob("*external*"))
-    # README must document reservation
-    readme = Path(f"{REPO}/v4/README.md").read_text()
+    assert not list((REPO_ROOT / "v4" / "results").glob("*external*"))
+    readme = (REPO_ROOT / "v4" / "README.md").read_text()
     assert "external_locked_test" in readme
     assert "does not exist" in readme
 
@@ -168,22 +146,19 @@ def test_every_gold_posting_in_accounting():
     acc = accounting_report(y, preds)
     assert acc["n_postings"] == len(gold_df)
     assert acc["total_cells"] == len(gold_df) * len(CATEGORIES)
-    # TP+FP+FN+TN should equal total cells
     assert acc["total_TP"] + acc["total_FP"] + acc["total_FN"] + acc["total_TN"] == acc["total_cells"]
 
 
 def test_label_prevalence_sums():
     gold_df, y, texts = load_all()
-    # Stakeholder_comm is most prevalent (~0.81), ethics_governance rarest (~0.043)
     prevalence = {c: float(y[:, i].mean()) for i, c in enumerate(CATEGORIES)}
     assert prevalence["stakeholder_comm"] > 0.7
     assert prevalence["ethics_governance"] < 0.1
-    # Total labels count is consistent with per-category supports
     assert sum(prevalence.values()) == pytest.approx(y.sum() / y.size * len(CATEGORIES), rel=1e-6)
 
 
 def test_taxonomy_version_recorded_in_summary():
-    summary_path = Path(f"{REPO}/v4/results/v4_lexical_summary.json")
+    summary_path = REPO_ROOT / "v4" / "results" / "v4_lexical_summary.json"
     if not summary_path.exists():
         pytest.skip("summary not yet generated")
     summary = json.loads(summary_path.read_text())
