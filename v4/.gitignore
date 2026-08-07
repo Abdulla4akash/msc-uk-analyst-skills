@@ -1,0 +1,8 @@
+# Keep generated results out of version control; commit snapshots intentionally via git add -f
+results/*.csv
+results/*.json
+results/*.txt
+!results/.gitkeep
+# Keep python cache out
+__pycache__/
+*.pyc
